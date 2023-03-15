@@ -94,7 +94,7 @@ runs:
         fi
 
     - name: Create ZIP file for attachment
-      uses: ./.github/actions/attach-dir-to-jira-issue
+      uses: ChainReaction-LTD/attach-dir-to-jira-issue@v1
       with:
         jira-base-url: ${{ inputs.jira-base-url }}
         jira-user-email: ${{ inputs.jira-user-email }}
