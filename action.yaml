@@ -1,0 +1,105 @@
+---
+name: open-jira-bug
+author: Yakir Magriso
+description: Open a Jira bug
+inputs:
+  jira-base-url:
+    description: Jira base URL
+    required: true
+  jira-user-email:
+    description: Jira user email
+    required: true
+  jira-api-token:
+    description: Jira API token
+    required: true
+  jira-project-key:
+    description: Jira project key
+    required: true
+  bug-summary:
+    description: Bug summary
+    required: true
+  bug-description:
+    description: Bug description
+    required: true
+  attachment-path:
+    description: Path to attachment (to add to the bug)
+    required: true
+  attachment-name:
+    description: Attachment name
+    required: true
+  assignee:
+    description: Assignee name (display name in Jira)
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Login to Jira
+      uses: atlassian/gajira-login@v2.0.0
+      env:
+        JIRA_BASE_URL: ${{ inputs.jira-base-url }}
+        JIRA_USER_EMAIL: ${{ inputs.jira-user-email }}
+        JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
+
+      # assignee (-1) means auto-assign to default user
+      # customfield_10020 - sprint ID field (according to https://chainreaction.atlassian.net/secure/admin/ConfigureCustomField!default.jspa?customFieldId=10020 - requires Jira admin permissions to view)
+    - name: Set additional fields (for new issue)
+      id: set-fields
+      shell: bash
+      run: |
+        cat > additional_fields.json <<EOF
+        {
+          "priority": {
+            "name": "High"
+          },
+          "assignee": {
+            "name": "-1"
+          }
+        }
+        EOF
+
+        ACTIVE_SPRINT_RES=$(curl --silent --request GET --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" --header "Accept: application/json" "${{ inputs.jira-base-url }}/rest/agile/1.0/board/11/sprint?state=active")
+        echo "ACTIVE_SPRINT_RES=$(echo ${ACTIVE_SPRINT_RES} | jq)"
+        ACTIVE_SPRINT_ID=$(echo ${ACTIVE_SPRINT_RES} | jq -r '.values[0].id')
+        echo "ACTIVE_SPRINT_ID=${ACTIVE_SPRINT_ID}"
+        if [[ -n ${ACTIVE_SPRINT_ID} ]]; then
+          echo "$(jq '. += { "customfield_10020": '${ACTIVE_SPRINT_ID}' }' additional_fields.json)" > additional_fields.json
+        fi
+        echo "FIELDS=$(jq -c '' additional_fields.json)" >> $GITHUB_OUTPUT
+
+    - name: Create a new Jira issue (on failure)
+      id: create-jira-bug
+      uses: atlassian/gajira-create@v2.0.1
+      with:
+        project: ${{ inputs.jira-project-key }}
+        issuetype: Bug
+        summary: |
+          ${{ inputs.bug-summary }}
+        description: |
+          ${{ inputs.bug-description }}
+        fields: '${{ steps.set-fields.outputs.FIELDS }}'
+
+    # Search by name may return more than one result. With jq we filter irrelevant results.
+    - name: Assign bug to given assignee (if provided)
+      shell: bash
+      if: ${{ inputs.assignee != '' }}
+      run: |
+        ASSIGNEE_ACCOUNT_ID=$(curl --silent --get --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" --header "Accept: application/json" --data-urlencode "query=${{ inputs.assignee }}" "${{ inputs.jira-base-url }}/rest/api/3/user/search" | jq -r '.[] | select(.displayName == "${{ inputs.assignee }}") | .accountId')
+        echo "ASSIGNEE_ACCOUNT_ID=${ASSIGNEE_ACCOUNT_ID}"
+        if [[ -n ${ASSIGNEE_ACCOUNT_ID} ]]; then
+          echo "Assigning issue to ${{ inputs.assignee }} ..."
+          curl --request PUT --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" --header 'Accept: application/json' --header 'Content-Type: application/json' --data '{ "accountId": "'"${ASSIGNEE_ACCOUNT_ID}"'" }' "${{ inputs.jira-base-url }}/rest/api/3/issue/${{ steps.create-jira-bug.outputs.issue }}/assignee"
+        else
+          echo "ASSIGNEE_ACCOUNT_ID cannot be found for provided assignee (${{ inputs.assignee }}) - skipping assign step!"
+        fi
+
+    - name: Create ZIP file for attachment
+      uses: ./.github/actions/attach-dir-to-jira-issue
+      with:
+        jira-base-url: ${{ inputs.jira-base-url }}
+        jira-user-email: ${{ inputs.jira-user-email }}
+        jira-api-token: ${{ inputs.jira-api-token }}
+        jira-issue-id: ${{ steps.create-jira-bug.outputs.issue }}
+        attachment-path: ${{ inputs.attachment-path }}
+        attachment-name: ${{ inputs.attachment-name }}
+        jira-issue-comment: Attaching report and logs from execution
