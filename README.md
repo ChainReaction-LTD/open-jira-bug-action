@@ -18,7 +18,7 @@ This Github Action enables you to open a Jira bug in a specified project, with a
 ```yaml
 
 - name: Open Jira Bug
-  uses: my-org/open-jira-bug@v1
+  uses: ChainReaction-LTD/open-jira-bug@v1
   with:
     jira-base-url: 'https://my-jira-instance.com'
     jira-user-email: 'my-jira-user@example.com'
