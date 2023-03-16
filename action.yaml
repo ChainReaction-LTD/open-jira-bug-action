@@ -1,5 +1,5 @@
 ---
-name: open-jira-bug
+name: open-jira-bug-action
 author: Yakir Magriso
 description: Open a Jira bug
 inputs:
