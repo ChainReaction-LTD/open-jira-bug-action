@@ -57,8 +57,10 @@ runs:
           }
         }
         EOF
+        JIRA_BOARD_ID=$(curl -s -x GET --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" -H "Accept: application/json" "${{ inputs.jira-base-url }}/rest/agile/1.0/board?projectKeyOrId=${{ inputs.jira-project-key }}" | jq '.values[-1].id')
 
-        ACTIVE_SPRINT_RES=$(curl --silent --request GET --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" --header "Accept: application/json" "${{ inputs.jira-base-url }}/rest/agile/1.0/board/11/sprint?state=active")
+        ACTIVE_SPRINT_RES=$(curl --silent --request GET --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" --header "Accept: application/json" "${{ inputs.jira-base-url }}/rest/agile/1.0/board/${JIRA_BOARD_ID}/sprint?state=active")
+
         echo "ACTIVE_SPRINT_RES=$(echo ${ACTIVE_SPRINT_RES} | jq)"
         ACTIVE_SPRINT_ID=$(echo ${ACTIVE_SPRINT_RES} | jq -r '.values[0].id')
         echo "ACTIVE_SPRINT_ID=${ACTIVE_SPRINT_ID}"
