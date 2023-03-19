@@ -30,6 +30,9 @@ inputs:
   assignee:
     description: Assignee name (display name in Jira)
     required: false
+  additional-fields:
+    description: Additional jira fields
+    required: false
 
 runs:
   using: composite
@@ -41,34 +44,6 @@ runs:
         JIRA_USER_EMAIL: ${{ inputs.jira-user-email }}
         JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
 
-      # assignee (-1) means auto-assign to default user
-      # customfield_10020 - sprint ID field (according to https://chainreaction.atlassian.net/secure/admin/ConfigureCustomField!default.jspa?customFieldId=10020 - requires Jira admin permissions to view)
-    - name: Set additional fields (for new issue)
-      id: set-fields
-      shell: bash
-      run: |
-        cat > additional_fields.json <<EOF
-        {
-          "priority": {
-            "name": "High"
-          },
-          "assignee": {
-            "name": "-1"
-          }
-        }
-        EOF
-        JIRA_BOARD_ID=$(curl -s -X GET --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" -H "Accept: application/json" "${{ inputs.jira-base-url }}/rest/agile/1.0/board?projectKeyOrId=${{ inputs.jira-project-key }}" | jq '.values[-1].id')
-
-        ACTIVE_SPRINT_RES=$(curl --silent --request GET --user "${{ inputs.jira-user-email }}:${{ inputs.jira-api-token }}" --header "Accept: application/json" "${{ inputs.jira-base-url }}/rest/agile/1.0/board/${JIRA_BOARD_ID}/sprint?state=active")
-
-        echo "ACTIVE_SPRINT_RES=$(echo ${ACTIVE_SPRINT_RES} | jq)"
-        ACTIVE_SPRINT_ID=$(echo ${ACTIVE_SPRINT_RES} | jq -r '.values[-1].id')
-        echo "ACTIVE_SPRINT_ID=${ACTIVE_SPRINT_ID}"
-        if [[ -n ${ACTIVE_SPRINT_ID} ]]; then
-          echo "$(jq '. += { "customfield_10020": '${ACTIVE_SPRINT_ID}' }' additional_fields.json)" > additional_fields.json
-        fi
-        echo "FIELDS=$(jq -c '' additional_fields.json)" >> $GITHUB_OUTPUT
-
     - name: Create a new Jira issue (on failure)
       id: create-jira-bug
       uses: atlassian/gajira-create@v2.0.1
@@ -79,7 +54,7 @@ runs:
           ${{ inputs.bug-summary }}
         description: |
           ${{ inputs.bug-description }}
-        fields: '${{ steps.set-fields.outputs.FIELDS }}'
+        fields: '${{ inputs.additional-fields }}'
 
     # Search by name may return more than one result. With jq we filter irrelevant results.
     - name: Assign bug to given assignee (if provided)
