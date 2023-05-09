@@ -38,7 +38,7 @@ runs:
   using: composite
   steps:
     - name: Login to Jira
-      uses: atlassian/gajira-login@v2.0.0
+      uses: atlassian/gajira-login@v3
       env:
         JIRA_BASE_URL: ${{ inputs.jira-base-url }}
         JIRA_USER_EMAIL: ${{ inputs.jira-user-email }}
@@ -46,7 +46,7 @@ runs:
 
     - name: Create a new Jira issue (on failure)
       id: create-jira-bug
-      uses: atlassian/gajira-create@v2.0.1
+      uses: atlassian/gajira-create@v3
       with:
         project: ${{ inputs.jira-project-key }}
         issuetype: Bug
